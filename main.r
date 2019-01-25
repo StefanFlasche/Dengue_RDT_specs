@@ -28,7 +28,7 @@ ggsave(filename = "Pics\\Fig1_Data.tiff",p.data ,unit="cm", width = 14, height =
 
 
 # sample from lognormal distribution in which the 50%, 2.5% and 97.5% quanitles fit the observed mean, CI.lo and CI.hi respectively
-LnfitSample <- function(input= c(mean=1, lo=.5, hi=2), N=1000){
+LnfitSample <- function(input= c(mean=1, lo=.5, hi=2), N=10000){
   mean = input[1] %>% as.numeric()
   lo = input[2] %>% as.numeric()
   hi = input[3] %>% as.numeric()
@@ -98,27 +98,38 @@ ggsave(filename = "Pics\\Fig2_Impact_TandV.tiff",p.tandv ,unit="cm", width = 25,
 # Impact of sensitivity --------------------------------------------------------------------
   
 # calculate sensitivity needed to avoid chosing to vaccinate test negative
-TestNegRatio <- function(seroPrevalence = .7, sensitivity = .8, specificty = .95,
-                             df.tmp = df, outcm = "hosp"){
+TestNegRatio <- function(seroPrevalence = .7, sensitivity = .8, specificity = .95,
+                             df.tmp = df, outcm = "hosp", midonly=F){
   df.tmp = df.tmp %>% filter(outcome == outcm)
-  Inc.SeroPos.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="pos") %>% 
-    select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
-  Inc.SeroPos.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="pos") %>% 
-    select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
-  Inc.SeroNeg.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="neg") %>% 
-    select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
-  Inc.SeroNeg.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="neg") %>% 
-    select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
-  
-  risk.if.testNeg.vacc <- ((1-seroPrevalence) * specificty *  Inc.SeroNeg.Vacc + 
+  if(midonly){
+    Inc.SeroPos.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="pos") %>% 
+      select(incidence.ph.mid)
+    Inc.SeroPos.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="pos") %>% 
+      select(incidence.ph.mid)
+    Inc.SeroNeg.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="neg") %>% 
+      select(incidence.ph.mid)
+    Inc.SeroNeg.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="neg") %>% 
+      select(incidence.ph.mid)
+  }else{
+    Inc.SeroPos.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="pos") %>% 
+      select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
+    Inc.SeroPos.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="pos") %>% 
+      select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
+    Inc.SeroNeg.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="neg") %>% 
+      select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
+    Inc.SeroNeg.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="neg") %>% 
+      select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
+  }
+   
+  risk.if.testNeg.vacc <- ((1-seroPrevalence) * specificity *  Inc.SeroNeg.Vacc + 
     seroPrevalence * (1-sensitivity) * Inc.SeroPos.Vacc ) / 
-    ((1-seroPrevalence) * specificty  + seroPrevalence * (1-sensitivity) ) 
-  risk.if.testNeg.nova <- ((1-seroPrevalence) * specificty *  Inc.SeroNeg.Cont + 
+    ((1-seroPrevalence) * specificity  + seroPrevalence * (1-sensitivity) ) 
+  risk.if.testNeg.nova <- ((1-seroPrevalence) * specificity *  Inc.SeroNeg.Cont + 
     seroPrevalence * (1-sensitivity) * Inc.SeroPos.Cont ) / 
-    ((1-seroPrevalence) * specificty  + seroPrevalence * (1-sensitivity) ) 
+    ((1-seroPrevalence) * specificity  + seroPrevalence * (1-sensitivity) ) 
   
   df_res <- tibble(seroPrevalence = seroPrevalence, sensitivity = sensitivity,
-                   specificty = specificty, outcome = outcm, 
+                   specificity = specificity, outcome = outcm, 
                    riskiftestNegvacc.mid = median(risk.if.testNeg.vacc), 
                    riskiftestNegnova.mid = median(risk.if.testNeg.nova),
                    riskiftestNegvacc.lo = quantile(risk.if.testNeg.vacc,.025), 
@@ -131,34 +142,71 @@ TestNegRatio <- function(seroPrevalence = .7, sensitivity = .8, specificty = .95
   return(df_res)
 }
 
-# analyse where test nagative vacc vs novacc risks are
+# analyse where test nagative vacc vs novacc risks are for a number of scenarios
 df.plt = NULL
 for(seroPrevalence in c(.5,.7,.9)){
-  for(specificity in c(.9,.95,1)){
-    for(sensitivity in seq(.6,1,by=.05)){
+  for(specificity in c(.95,1)){
+    for(sensitivity in seq(.6,1,by=.1)){
       df.plt <- df.plt %>% 
-        rbind(TestNegRatio(seroPrevalence = seroPrevalence, sensitivity = sensitivity, specificty = specificity)) %>%
-        rbind(TestNegRatio(seroPrevalence = seroPrevalence, sensitivity = sensitivity, specificty = specificity, outcm = "severe"))
+        rbind(TestNegRatio(seroPrevalence = seroPrevalence, sensitivity = sensitivity, specificity = specificity)) %>%
+        rbind(TestNegRatio(seroPrevalence = seroPrevalence, sensitivity = sensitivity, specificity = specificity, outcm = "severe"))
       
     }
   }
 }
 
-p.sens <- df.plt %>% ggplot(aes(x=sensitivity, y = RR.mid, ymin=RR.lo, ymax= RR.hi, color=outcome)) +
+p.sens <- df.plt %>% 
+  ggplot(aes(x=sensitivity, y = RR.mid, ymin=RR.lo, ymax= RR.hi, color=outcome)) +
   geom_linerange(position = position_dodge(width = 0.04)) +
   geom_point(position = position_dodge(width = 0.04)) +
-  facet_grid(seroPrevalence ~ specificty, scales = "free") +
+  facet_grid(seroPrevalence ~ specificity, scales = "free") +
   scale_y_log10() + geom_hline(yintercept = 1, color="black", lty="dashed") +
   scale_color_discrete(name="outcome") +
   ylab("RR for hospitalised dengue\nin test-negative for\nvaccination vs no vaccination")
-ggsave(filename = "Pics\\Fig3_SensitivityImpact.tiff",p.sens ,unit="cm", width = 25, height = 14, compression = "lzw", dpi = 300)
+ggsave(filename = "Pics\\Fig3_SensitivityImpact.tiff",p.sens ,unit="cm", width = 20, height = 12, compression = "lzw", dpi = 300)
+
+# analyse where test nagative vacc vs novacc risks - map
+df.plt2 = NULL
+for(seroPrevalence in c(.5,.6,.7,.8,.9)){
+  for(specificity in seq(.9,1,by=.001)){
+    for(sensitivity in seq(.6,1,by=.001)){
+      df.plt2 <- df.plt2 %>% 
+        rbind(TestNegRatio(seroPrevalence = seroPrevalence, sensitivity = sensitivity, specificity = specificity, midonly=T)) %>%
+        rbind(TestNegRatio(seroPrevalence = seroPrevalence, sensitivity = sensitivity, specificity = specificity, outcm = "severe", midonly=T))
+      
+    }
+  }
+}
+
+p.sens.b <- df.plt2 %>% 
+  ggplot(aes(x=sensitivity, y=specificity, fill = RR.mid)) +
+  facet_grid(seroPrevalence ~ outcome) + 
+  geom_tile() +
+  scale_fill_gradient2(name="RR in vaccinees\nvs control", low = "green", mid = "yellow",
+                       high = "red", midpoint = 0, breaks=round(c(.5,1/1.2,1/1.1,1,1.1,1.2,2),2),trans = "log", limits=c(1/1.2,1.2)) +
+  theme_bw() 
+ggsave("Pics\\Fig3b_SensitivityImpactMap.tiff", p.sens.b, width = 20, height = 13, units = "cm", compression="lzw", dpi =300)
 
 
 # calculate Sens and Spec --------------------------------------------------------------------
 
 # calculate test sens and spec given specified risk threshold and serprevalence range
 # input:
-U.seroprevalence = c(40,80)
-U.safety = 10 / 100000 # does this make sense? Other specifications? Min averted per case caused or 
+U.seroprevalence = .7
+U.safety.AbsoluteRate = 10 / 100000 # number of cases caused in seroneg per 100,000 test and vaccinated 
+U.safety.RelativeRate = 100/1 # ratio of cases prevented vs cases caused. Works? needs sens
+
+# calculate specificty needed.
+specificity <- 0
+Sp.high.enough.abs <- function(specificity, seroPrevalence){
+  res <- (1-seroPrevalence) * (1-specificity) * 100000 *
+    (subset(df,randomisation == "vacc" & serostatus == "neg" & outcome == "hosp")$incidence.ph.mid - 
+    subset(df,randomisation == "control" & serostatus == "neg" & outcome == "hosp")$incidence.ph.mid)/100 < U.safety.AbsoluteRate * 100000
+    return(res)
+}
+
+
+# calculate sensitivity needed
+# TODO
 
 
