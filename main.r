@@ -103,13 +103,13 @@ TestNegRatio <- function(seroPrevalence = .7, sensitivity = .8, specificity = .9
   df.tmp = df.tmp %>% filter(outcome == outcm)
   if(midonly){
     Inc.SeroPos.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="pos") %>% 
-      select(incidence.ph.mid)
+      select(incidence.ph.mid) %>% as.numeric()
     Inc.SeroPos.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="pos") %>% 
-      select(incidence.ph.mid)
+      select(incidence.ph.mid) %>% as.numeric()
     Inc.SeroNeg.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="neg") %>% 
-      select(incidence.ph.mid)
+      select(incidence.ph.mid) %>% as.numeric()
     Inc.SeroNeg.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="neg") %>% 
-      select(incidence.ph.mid)
+      select(incidence.ph.mid) %>% as.numeric()
   }else{
     Inc.SeroPos.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="pos") %>% 
       select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
