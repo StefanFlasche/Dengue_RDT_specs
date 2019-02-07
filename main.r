@@ -163,13 +163,13 @@ p.sens <- df.plt %>%
   scale_y_log10() + geom_hline(yintercept = 1, color="black", lty="dashed") +
   scale_color_discrete(name="outcome") +
   ylab("RR for hospitalised dengue\nin test-negative for\nvaccination vs no vaccination")
-ggsave(filename = "Pics\\Fig3_SensitivityImpact.tiff",p.sens ,unit="cm", width = 20, height = 12, compression = "lzw", dpi = 300)
+ggsave(filename = "Pics\\FigX_SensitivityImpact.tiff",p.sens ,unit="cm", width = 20, height = 12, compression = "lzw", dpi = 300)
 
 # analyse where test nagative vacc vs novacc risks - map
 df.plt2 = NULL
 for(seroPrevalence in c(.5,.6,.7,.8,.9)){
-  for(specificity in seq(.9,1,by=.001)){
-    for(sensitivity in seq(.6,1,by=.001)){
+  for(specificity in seq(.9,1,by=.01)){
+    for(sensitivity in seq(.6,1,by=.01)){
       df.plt2 <- df.plt2 %>% 
         rbind(TestNegRatio(seroPrevalence = seroPrevalence, sensitivity = sensitivity, specificity = specificity, midonly=T)) %>%
         rbind(TestNegRatio(seroPrevalence = seroPrevalence, sensitivity = sensitivity, specificity = specificity, outcm = "severe", midonly=T))
@@ -183,30 +183,60 @@ p.sens.b <- df.plt2 %>%
   facet_grid(seroPrevalence ~ outcome) + 
   geom_tile() +
   scale_fill_gradient2(name="RR in vaccinees\nvs control", low = "green", mid = "yellow",
-                       high = "red", midpoint = 0, breaks=round(c(.5,1/1.2,1/1.1,1,1.1,1.2,2),2),trans = "log", limits=c(1/1.2,1.2)) +
+                       high = "red", midpoint = 0, breaks=round(c(.5,1/1.2,1/1.1,1,1.1,1.2,2),2),trans = "log", limits=c(1/1.21,1.2)) +
   theme_bw() 
-ggsave("Pics\\Fig3b_SensitivityImpactMap.tiff", p.sens.b, width = 20, height = 13, units = "cm", compression="lzw", dpi =300)
+ggsave("Pics\\Fig3a_SensitivityImpactMap.tiff", p.sens.b, width = 20, height = 13, units = "cm", compression="lzw", dpi =300)
 
 
-# calculate Sens and Spec --------------------------------------------------------------------
+# importance of NPV ---------------------------------------------
+TestNegRatio.NPV <- function(NPV = .7, df.tmp = df, outcm = "hosp"){
+  df.tmp = df.tmp %>% filter(outcome == outcm)
 
-# calculate test sens and spec given specified risk threshold and serprevalence range
-# input:
-U.seroprevalence = .7
-U.safety.AbsoluteRate = 10 / 100000 # number of cases caused in seroneg per 100,000 test and vaccinated 
-U.safety.RelativeRate = 100/1 # ratio of cases prevented vs cases caused. Works? needs sens
+  Inc.SeroPos.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="pos") %>% 
+    select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
+  Inc.SeroPos.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="pos") %>% 
+    select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
+  Inc.SeroNeg.Vacc <- df.tmp %>% filter(randomisation=="vacc" & serostatus =="neg") %>% 
+    select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
+  Inc.SeroNeg.Cont <- df.tmp %>% filter(randomisation=="control" & serostatus =="neg") %>% 
+    select(incidence.ph.mid:incidence.ph.hi) %>% LnfitSample()
 
-# calculate specificty needed.
-specificity <- 0
-Sp.high.enough.abs <- function(specificity, seroPrevalence){
-  res <- (1-seroPrevalence) * (1-specificity) * 100000 *
-    (subset(df,randomisation == "vacc" & serostatus == "neg" & outcome == "hosp")$incidence.ph.mid - 
-    subset(df,randomisation == "control" & serostatus == "neg" & outcome == "hosp")$incidence.ph.mid)/100 < U.safety.AbsoluteRate * 100000
-    return(res)
+  risk.if.testNeg.vacc <- ( NPV * Inc.SeroNeg.Vacc + 
+                            (1-NPV) * Inc.SeroPos.Vacc ) 
+  risk.if.testNeg.nova <- ( NPV * Inc.SeroNeg.Cont + 
+                            (1-NPV) * Inc.SeroPos.Cont ) 
+  
+  df_res <- tibble(NPV = NPV, outcome = outcm, 
+                   riskiftestNegvacc.mid = median(risk.if.testNeg.vacc), 
+                   riskiftestNegnova.mid = median(risk.if.testNeg.nova),
+                   riskiftestNegvacc.lo = quantile(risk.if.testNeg.vacc,.025), 
+                   riskiftestNegvacc.hi = quantile(risk.if.testNeg.vacc,.975),
+                   riskiftestNegnova.lo = quantile(risk.if.testNeg.nova,.025), 
+                   riskiftestNegnova.hi = quantile(risk.if.testNeg.nova,.975),
+                   RR.mid =  median(risk.if.testNeg.vacc / risk.if.testNeg.nova), 
+                   RR.lo = quantile(risk.if.testNeg.vacc / risk.if.testNeg.nova, .025),
+                   RR.hi = quantile(risk.if.testNeg.vacc / risk.if.testNeg.nova, .975))
+  return(df_res)
 }
 
+df.plt.NPV = NULL
+for( NPV in seq(.5,1,by=0.01)){
+  df.plt.NPV = df.plt.NPV %>% 
+    rbind(TestNegRatio.NPV(NPV)) %>%
+    rbind(TestNegRatio.NPV(NPV, outcm = "severe"))
+}
+df.plt.NPV %>%
+  ggplot(aes(x=NPV, y=RR.mid, ymin=RR.lo, ymax=RR.hi, group=outcome, color=outcome, fill=outcome)) +
+  geom_ribbon(alpha=0.4, color=NA) +
+  geom_line() +
+  geom_hline(yintercept = 1, color = "black", lty = "dashed") + 
+  facet_grid(outcome~., scales="free") +
+  scale_y_log10() +
+  xlab("Negative predictive value") + ylab("RR for dengue disease \nin test-negative for\nvaccination vs no vaccination") +
+  theme_bw()+
+  guides(fill = FALSE, color=F, group=F) 
+ggsave("Pics\\Fig3b_NPVimpact.tiff", width = 15, height = 13, units = "cm", compression="lzw", dpi =300)
 
-# calculate sensitivity needed
-# TODO
+
 
 
