@@ -238,5 +238,37 @@ df.plt.NPV %>%
 ggsave("Pics\\Fig3b_NPVimpact.tiff", width = 15, height = 13, units = "cm", compression="lzw", dpi =300)
 
 
+# calculate min sens needed ---------------------------------------------
 
+get_PV <- function(specificity=.9, sensitivity=.7, seroprevalence=0.7 ){
+  tp= sensitivity * seroprevalence
+  fn= (1-sensitivity) * seroprevalence
+  tn= specificity * (1-seroprevalence)
+  fp= (1-specificity) * (1-seroprevalence)
+  
+  PPV = tp / (tp+fp) #prop of true positive among all pos
+  NPV = tn / (tn+fn) #prop of negative positive among all negative
+  
+  df = data.frame(specificity=specificity, sensitivity=sensitivity, seroprevalence=seroprevalence, NPV=NPV, PPV=PPV) %>%
+    as.tibble()
+  
+  return(df)
+  
+}
+
+res = NULL
+for(specificity in c(.9,.95,.99)){
+  for(seroprevalence in seq(0.5,1,by=0.05)){
+    for(sensitivity in seq(0,1,by=0.01)){
+      res = res %>%
+        rbind(get_PV(specificity, sensitivity, seroprevalence))
+    }
+  }
+}
+min.PPV = .9
+min.NPV = .75
+
+res %>% group_by(specificity,seroprevalence) %>% mutate(keep_PPV = ( PPV == min(PPV + 5*(PPV<min.PPV))),
+                                                        keep_NPV = ( NPV == min(NPV + 5*(NPV<min.NPV)))) %>%
+  filter(keep_PPV | keep_NPV)
 
