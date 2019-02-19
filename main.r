@@ -227,15 +227,15 @@ for( NPV in seq(.5,1,by=0.01)){
 }
 df.plt.NPV %>%
   ggplot(aes(x=NPV, y=RR.mid, ymin=RR.lo, ymax=RR.hi, group=outcome, color=outcome, fill=outcome)) +
-  geom_ribbon(alpha=0.4, color=NA) +
+  geom_ribbon(alpha=0.2, color=NA) +
   geom_line() +
   geom_hline(yintercept = 1, color = "black", lty = "dashed") + 
-  facet_grid(outcome~., scales="free") +
+  #facet_grid(outcome~., scales="free") +
   scale_y_log10() +
   xlab("Negative predictive value") + ylab("RR for dengue disease \nin test-negative for\nvaccination vs no vaccination") +
   theme_bw()+
-  guides(fill = FALSE, color=F, group=F) 
-ggsave("Pics\\Fig3b_NPVimpact.tiff", width = 15, height = 13, units = "cm", compression="lzw", dpi =300)
+  guides(group=F) 
+ggsave("Pics\\Fig3b_NPVimpact.tiff", width = 12, height = 7, units = "cm", compression="lzw", dpi =300)
 
 
 # calculate min sens needed ---------------------------------------------
@@ -249,7 +249,7 @@ get_PV <- function(specificity=.9, sensitivity=.7, seroprevalence=0.7 ){
   PPV = tp / (tp+fp) #prop of true positive among all pos
   NPV = tn / (tn+fn) #prop of negative positive among all negative
   
-  df = data.frame(specificity=specificity, sensitivity=sensitivity, seroprevalence=seroprevalence, NPV=NPV, PPV=PPV) %>%
+  df = data.frame(specificity=as.factor(specificity), sensitivity=sensitivity, seroprevalence=seroprevalence, NPV=NPV, PPV=PPV) %>%
     as.tibble()
   
   return(df)
@@ -258,17 +258,30 @@ get_PV <- function(specificity=.9, sensitivity=.7, seroprevalence=0.7 ){
 
 res = NULL
 for(specificity in c(.9,.95,.99)){
-  for(seroprevalence in seq(0.5,1,by=0.05)){
+  for(seroprevalence in seq(0.15,1,by=0.01)){
     for(sensitivity in seq(0,1,by=0.01)){
       res = res %>%
         rbind(get_PV(specificity, sensitivity, seroprevalence))
     }
   }
 }
-min.PPV = .9
-min.NPV = .75
+min.PPV = .90
+min.NPV = .75 # Ratio for RR forvaccinees to get hospitalised in Seropos vs Seroneg is 1.57/1.09 / 0.375/1.88
+p = res %>% group_by(specificity,seroprevalence) %>% mutate(PPV.based = ( PPV == min(PPV + 5*(PPV<min.PPV))),
+                                                        NPV.based = ( NPV == min(NPV + 5*(NPV<min.NPV)))) %>%
+  filter(PPV.based | NPV.based) %>% 
+  gather(criteria, value, -specificity, -sensitivity, -seroprevalence, -NPV, -PPV) %>%
+  filter (value) %>%
+  ggplot(aes(x=seroprevalence, y=sensitivity, color=criteria, lty = specificity)) +
+    geom_line() +
+    theme_bw() + 
+    ylab("minimum sensitivity") +
+    scale_x_continuous(breaks = seq(0.1,1,by=0.2)) +
+    scale_y_continuous(breaks = seq(0,1,by=0.2))
+ggsave("Pics/RequiredSensitivity.tiff", p, units = "cm",height = 7, width = 12, compression="lzw", dpi=300)
+    
+#NPV=.76
+#(1.88-0.375)*(1-NPV) + (1.09-1.57)*NPV # averate risk if vaccinated ## needs> 0 to not vaccinate
+#( NPV * 1.57 + (1-NPV) * 0.375 ) - ( NPV * 1.09 + (1-NPV) * 1.88 ) # risk vacc -  # risk novacc ## needs >0 to not use vaccine
 
-res %>% group_by(specificity,seroprevalence) %>% mutate(keep_PPV = ( PPV == min(PPV + 5*(PPV<min.PPV))),
-                                                        keep_NPV = ( NPV == min(NPV + 5*(NPV<min.NPV)))) %>%
-  filter(keep_PPV | keep_NPV)
 
