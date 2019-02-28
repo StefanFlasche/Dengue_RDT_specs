@@ -23,7 +23,8 @@ p.data <- df %>% ggplot(aes(x= serostatus, y = incidence.ph.mid, ymin = incidenc
   geom_linerange(position=position_dodge(width = 0.5)) +
   geom_point(position=position_dodge(width = 0.5)) +
   facet_grid(.~outcome, scales = "free") +
-  coord_flip() + ylab("incidence per 100")
+  coord_flip() + ylab("incidence per 100") +
+  labs(y = "Incidence per 100", x = "Serostatus", color = "Randomisation")
 ggsave(filename = "Pics\\Fig1_Data.tiff",p.data ,unit="cm", width = 14, height = 5, compression = "lzw", dpi = 300)
 
 
@@ -182,9 +183,10 @@ p.sens.b <- df.plt2 %>%
   ggplot(aes(x=sensitivity, y=specificity, fill = RR.mid)) +
   facet_grid(seroPrevalence ~ outcome) + 
   geom_tile() +
-  scale_fill_gradient2(name="RR in vaccinees\nvs control", low = "green", mid = "yellow",
+  scale_fill_gradient2(name="RR in vaccinees\nvs controls", low = "green", mid = "yellow",
                        high = "red", midpoint = 0, breaks=round(c(.5,1/1.2,1/1.1,1,1.1,1.2,2),2),trans = "log", limits=c(1/1.21,1.2)) +
-  theme_bw() 
+  theme_bw() +
+  labs(x = "Sensitivity", y = "Specificity")
 ggsave("Pics\\Fig3a_SensitivityImpactMap.tiff", p.sens.b, width = 20, height = 13, units = "cm", compression="lzw", dpi =300)
 
 
@@ -225,6 +227,8 @@ for( NPV in seq(.5,1,by=0.01)){
     rbind(TestNegRatio.NPV(NPV)) %>%
     rbind(TestNegRatio.NPV(NPV, outcm = "severe"))
 }
+df.plt.NPV$outcome = df.plt.NPV$outcome %>% str_replace("hosp","Hospitalised")
+df.plt.NPV$outcome = df.plt.NPV$outcome %>% str_replace("severe","Severe")
 df.plt.NPV %>%
   ggplot(aes(x=NPV, y=RR.mid, ymin=RR.lo, ymax=RR.hi, group=outcome, color=outcome, fill=outcome)) +
   geom_ribbon(alpha=0.2, color=NA) +
@@ -232,10 +236,11 @@ df.plt.NPV %>%
   geom_hline(yintercept = 1, color = "black", lty = "dashed") + 
   #facet_grid(outcome~., scales="free") +
   scale_y_log10() +
-  xlab("Negative predictive value") + ylab("RR for dengue disease \nin test-negative for\nvaccination vs no vaccination") +
+  labs(x = "Negative predictive value", y = "RR for\nsevere or hospitalised disease \nin test-negative for\nvaccination vs no vaccination",
+        fill = "Outcome", color = "Outcome") +
   theme_bw()+
   guides(group=F) 
-ggsave("Pics\\Fig3b_NPVimpact.tiff", width = 12, height = 7, units = "cm", compression="lzw", dpi =300)
+ggsave("Pics\\Fig3b_NPVimpact.tiff", width = 13, height = 7, units = "cm", compression="lzw", dpi =300)
 
 
 # calculate min sens needed ---------------------------------------------
@@ -267,21 +272,19 @@ for(specificity in c(.9,.95,.99)){
 }
 min.PPV = .90
 min.NPV = .75 # Ratio for RR forvaccinees to get hospitalised in Seropos vs Seroneg is 1.57/1.09 / 0.375/1.88
-p = res %>% group_by(specificity,seroprevalence) %>% mutate(PPV.based = ( PPV == min(PPV + 5*(PPV<min.PPV))),
+p.dat = res %>% group_by(specificity,seroprevalence) %>% mutate(PPV.based = ( PPV == min(PPV + 5*(PPV<min.PPV))),
                                                         NPV.based = ( NPV == min(NPV + 5*(NPV<min.NPV)))) %>%
   filter(PPV.based | NPV.based) %>% 
   gather(criteria, value, -specificity, -sensitivity, -seroprevalence, -NPV, -PPV) %>%
-  filter (value) %>%
+  filter (value) 
+p.dat$criteria = p.dat$criteria %>% str_replace("V.b","V b")
+p = p.dat %>% 
   ggplot(aes(x=seroprevalence, y=sensitivity, color=criteria, lty = specificity)) +
-    geom_line() +
-    theme_bw() + 
-    ylab("minimum sensitivity") +
-    scale_x_continuous(breaks = seq(0.1,1,by=0.2)) +
-    scale_y_continuous(breaks = seq(0,1,by=0.2))
-ggsave("Pics/RequiredSensitivity.tiff", p, units = "cm",height = 7, width = 12, compression="lzw", dpi=300)
+  geom_line() +
+  theme_bw() + 
+  labs(x = "Seroprevalence", y = "Minimum sensitivity", color = "Criteria", lty = "Specificity") +
+  scale_x_continuous(breaks = seq(0.1,1,by=0.2)) +
+  scale_y_continuous(breaks = seq(0,1,by=0.2))
+ggsave("Pics/RequiredSensitivity.tiff", p, units = "cm",height = 7, width = 13, compression="lzw", dpi=300)
     
-#NPV=.76
-#(1.88-0.375)*(1-NPV) + (1.09-1.57)*NPV # averate risk if vaccinated ## needs> 0 to not vaccinate
-#( NPV * 1.57 + (1-NPV) * 0.375 ) - ( NPV * 1.09 + (1-NPV) * 1.88 ) # risk vacc -  # risk novacc ## needs >0 to not use vaccine
-
 
