@@ -33,7 +33,7 @@ LnfitSample <- function(input= c(mean=1, lo=.5, hi=2), N=10000){
   mean = input[1] %>% as.numeric()
   lo = input[2] %>% as.numeric()
   hi = input[3] %>% as.numeric()
-  rlnorm(N, meanlog = log(mean), sdlog = (log(mean/lo) +  log(hi/mean))/2/1.92) %>%
+  rlnorm(N, meanlog = log(mean), sdlog = (log(mean/lo) +  log(hi/mean))/2/1.96) %>%
     return()
 }
 
