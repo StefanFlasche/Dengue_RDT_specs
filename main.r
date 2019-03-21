@@ -1,6 +1,7 @@
 
 # Investigating Dengue RDT sensitivity and specificty requirements
 # written by Stefan Flasche using R version 3.4.4
+# results published in "On the importance of sensitivity and the negative predictive value for a rapid dengue test" by S. Flasche and P.G. Smith
 
 # load packages
 require(tidyverse)
@@ -240,8 +241,8 @@ df.plt.NPV %>%
         fill = "Outcome", color = "Outcome") +
   theme_bw()+
   guides(group=F) 
-ggsave("Pics\\Fig3b_NPVimpact.tiff", width = 13, height = 7, units = "cm", compression="lzw", dpi =300)
-
+ggsave("Pics\\Fig3b_NPVimpact.tiff", width = 13, height = 7, units = "cm", compression="lzw", dpi =1000)
+ggsave("Pics\\Fig3b_NPVimpact.pdf", width = 13, height = 7, units = "cm")
 
 # calculate min sens needed ---------------------------------------------
 
@@ -285,6 +286,6 @@ p = p.dat %>%
   labs(x = "Seroprevalence", y = "Minimum sensitivity", color = "Criteria", lty = "Specificity") +
   scale_x_continuous(breaks = seq(0.1,1,by=0.2)) +
   scale_y_continuous(breaks = seq(0,1,by=0.2))
-ggsave("Pics/RequiredSensitivity.tiff", p, units = "cm",height = 7, width = 13, compression="lzw", dpi=300)
-    
+ggsave("Pics/RequiredSensitivity.tiff", p, units = "cm",height = 7, width = 13, compression="lzw", dpi=1000)
+ggsave("Pics/RequiredSensitivity.pdf", p, units = "cm",height = 7, width = 13)
 
